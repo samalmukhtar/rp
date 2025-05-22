@@ -88,10 +88,22 @@
       font-weight: bold;
       color: #f8b500;
     }
+    .summary {
+      background-color: #2e2e2e;
+      padding: 10px;
+      border-radius: 5px;
+      margin-top: 10px;
+      font-size: 14px;
+      color: #f8b500;
+    }
+    .progress-field {
+      background-color: #2d2d2d !important;
+      font-weight: bold;
+      color: #f8b500 !important;
+    }
   </style>
 </head>
 <body>
-
 <div class="container">
   <h2>جدول تمارين المنزل مع Bar وDumbbell</h2>
   <div class="week-selector">
@@ -105,11 +117,9 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js "></script>
-
 <script>
   const daysOfWeek = ["السبت", "الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"];
 
-  // بيانات البداية
   let data = {
     weeks: [
       {
@@ -130,7 +140,6 @@
     ]
   };
 
-  // تمارين مقترحة مع خوارزمية بسيطة للاقتراح
   const exerciseSuggestions = {
     "Bar": [
       { name: "سكوات بالبار", sessions: "3", reps: "8", weight: "40", percent: "80" },
@@ -155,15 +164,46 @@
 
   function loadData() {
     const saved = localStorage.getItem("gymWeeklyData");
-    if (saved) data = JSON.parse(saved);
+    if (saved) {
+      data = JSON.parse(saved);
+      // إعادة حساب التقدم لكل تمرين عند التحميل
+      data.weeks.forEach(week => {
+        Object.values(week.days).forEach(exercises => {
+          exercises.forEach(ex => {
+            ex.progress = calculateProgress(ex.weight, ex.reps, ex.percent);
+          });
+        });
+      });
+    }
+  }
+
+  // ✅ دالة محسنة لحساب التقدم
+  function calculateProgress(weight, reps, percent) {
+    const w = parseInt(weight || 0);
+    const r = parseInt(reps || 0);
+    const p = parseInt(percent || 0);
+
+    const totalLoad = w * r;
+    return p > 0 ? `${totalLoad} كغ (${p}%)` : totalLoad > 0 ? `${totalLoad} كغ` : "0";
   }
 
   function updateExercise(weekIdx, day, exIdx, field, value) {
+    // 🔒 منع إدخال غير الأرقام
+    if (["sessions", "reps", "weight", "percent", "duration"].includes(field)) {
+      if (!/^\d*$/.test(value)) return; // يسمح فقط بالأرقام
+    }
+
     const exercise = data.weeks[weekIdx].days[day][exIdx];
     exercise[field] = value;
-    exercise.progress = `${exercise.weight || 0} × ${exercise.reps || 0}`;
-    const progressInput = document.querySelector(`#week-${weekIdx}-day-${day} tbody tr:nth-child(${exIdx + 1}) input.progress-field`);
+
+    // إعادة حساب التقدم
+    exercise.progress = calculateProgress(exercise.weight, exercise.reps, exercise.percent);
+
+    // تحديث القيمة في الجدول
+    const containerId = `#week-${weekIdx}-day-${day}`;
+    const progressInput = document.querySelector(`${containerId} tbody tr:nth-child(${exIdx + 1}) input.progress-field`);
     if (progressInput) progressInput.value = exercise.progress;
+
     saveData();
   }
 
@@ -184,6 +224,7 @@
       progress: "0"
     };
     const newEx = exercise || defaultEx;
+    newEx.progress = calculateProgress(newEx.weight, newEx.reps, newEx.percent);
     data.weeks[weekIdx].days[day].push(newEx);
     saveData();
     renderWeekContent(weekIdx);
@@ -208,64 +249,27 @@
     exercises.forEach((ex, exIdx) => {
       const tr = document.createElement("tr");
 
-      // اسم التمرين (تعديل)
+      // اسم التمرين
       const tdName = document.createElement("td");
       const nameInput = document.createElement("input");
       nameInput.type = "text";
       nameInput.value = ex.name;
-      nameInput.oninput = (e) => updateExercise(weekIdx, day, exIdx, "name", e.target.value);
+      nameInput.oninput = e => updateExercise(weekIdx, day, exIdx, "name", e.target.value);
       tdName.appendChild(nameInput);
       tr.appendChild(tdName);
 
-      // الجلسات
-      const tdSessions = document.createElement("td");
-      const sessionsInput = document.createElement("input");
-      sessionsInput.type = "number";
-      sessionsInput.min = "0";
-      sessionsInput.value = ex.sessions;
-      sessionsInput.oninput = (e) => updateExercise(weekIdx, day, exIdx, "sessions", e.target.value);
-      tdSessions.appendChild(sessionsInput);
-      tr.appendChild(tdSessions);
-
-      // التكرار
-      const tdReps = document.createElement("td");
-      const repsInput = document.createElement("input");
-      repsInput.type = "number";
-      repsInput.min = "0";
-      repsInput.value = ex.reps;
-      repsInput.oninput = (e) => updateExercise(weekIdx, day, exIdx, "reps", e.target.value);
-      tdReps.appendChild(repsInput);
-      tr.appendChild(tdReps);
-
-      // الوزن
-      const tdWeight = document.createElement("td");
-      const weightInput = document.createElement("input");
-      weightInput.type = "number";
-      weightInput.min = "0";
-      weightInput.value = ex.weight;
-      weightInput.oninput = (e) => updateExercise(weekIdx, day, exIdx, "weight", e.target.value);
-      tdWeight.appendChild(weightInput);
-      tr.appendChild(tdWeight);
-
-      // النسبة %
-      const tdPercent = document.createElement("td");
-      const percentInput = document.createElement("input");
-      percentInput.type = "number";
-      percentInput.min = "0";
-      percentInput.value = ex.percent;
-      percentInput.oninput = (e) => updateExercise(weekIdx, day, exIdx, "percent", e.target.value);
-      tdPercent.appendChild(percentInput);
-      tr.appendChild(tdPercent);
-
-      // المدة
-      const tdDuration = document.createElement("td");
-      const durationInput = document.createElement("input");
-      durationInput.type = "number";
-      durationInput.min = "0";
-      durationInput.value = ex.duration;
-      durationInput.oninput = (e) => updateExercise(weekIdx, day, exIdx, "duration", e.target.value);
-      tdDuration.appendChild(durationInput);
-      tr.appendChild(tdDuration);
+      // الجلسات / التكرار / الوزن / النسبة / المدة
+      ["sessions", "reps", "weight", "percent", "duration"].forEach(field => {
+        const td = document.createElement("td");
+        const input = document.createElement("input");
+        input.type = "number";
+        input.min = "0";
+        input.pattern = "[0-9]*";
+        input.value = ex[field];
+        input.oninput = e => updateExercise(weekIdx, day, exIdx, field, e.target.value);
+        td.appendChild(input);
+        tr.appendChild(td);
+      });
 
       // التقدم
       const tdProgress = document.createElement("td");
@@ -277,7 +281,7 @@
       tdProgress.appendChild(progressInput);
       tr.appendChild(tdProgress);
 
-      // حذف
+      // زر الحذف
       const tdDelete = document.createElement("td");
       const delBtn = document.createElement("button");
       delBtn.textContent = "حذف";
@@ -295,16 +299,16 @@
 
   function createDaySection(weekIdx, day) {
     const section = document.createElement("div");
+    section.id = `week-${weekIdx}-day-${day}`;
     section.className = "day-section";
 
     const title = document.createElement("h3");
     title.textContent = day;
     section.appendChild(title);
 
-    const table = createDayTable(weekIdx, day);
-    section.appendChild(table);
+    section.appendChild(createDayTable(weekIdx, day));
 
-    // قائمة منسدلة لاختيار تمرين جديد
+    // قائمة منسدلة للتمارين المقترحة
     const dropdown = document.createElement("select");
     dropdown.innerHTML = `<option value="">اختيار تمرين جديد</option>`;
     Object.keys(exerciseSuggestions).forEach(category => {
@@ -315,12 +319,14 @@
         dropdown.appendChild(option);
       });
     });
+
     dropdown.onchange = () => {
       if (dropdown.value) {
         const selectedEx = JSON.parse(dropdown.value);
         addExercise(weekIdx, day, selectedEx);
       }
     };
+
     section.appendChild(dropdown);
 
     // زر إضافة تمرين فارغ
@@ -329,18 +335,19 @@
     addBtn.onclick = () => addExercise(weekIdx, day);
     section.appendChild(addBtn);
 
-    const labelNotes = document.createElement("label");
-    labelNotes.textContent = "ملاحظات اليوم:";
-    section.appendChild(labelNotes);
+    // ملاحظات اليوم
+    const notesLabel = document.createElement("label");
+    notesLabel.textContent = "ملاحظات اليوم:";
+    section.appendChild(notesLabel);
 
-    const textarea = document.createElement("textarea");
-    textarea.value = data.weeks[weekIdx].days[day].notes || "";
-    textarea.placeholder = "أضف ملاحظاتك هنا...";
-    textarea.oninput = (e) => {
+    const notesTextarea = document.createElement("textarea");
+    notesTextarea.value = data.weeks[weekIdx].days[day].notes || "";
+    notesTextarea.placeholder = "أضف ملاحظاتك هنا...";
+    notesTextarea.oninput = e => {
       data.weeks[weekIdx].days[day].notes = e.target.value;
       saveData();
     };
-    section.appendChild(textarea);
+    section.appendChild(notesTextarea);
 
     return section;
   }
@@ -350,11 +357,11 @@
     container.innerHTML = "";
     const week = data.weeks[weekIdx];
     if (!week) return;
+
     daysOfWeek.forEach(day => {
       if (!week.days[day]) week.days[day] = [];
       if (!week.days[day].notes) week.days[day].notes = "";
-      const daySection = createDaySection(weekIdx, day);
-      container.appendChild(daySection);
+      container.appendChild(createDaySection(weekIdx, day));
     });
   }
 
@@ -362,10 +369,10 @@
     const select = document.getElementById("weekSelect");
     select.innerHTML = "";
     data.weeks.forEach((w, i) => {
-      const option = document.createElement("option");
-      option.value = i;
-      option.textContent = w.name;
-      select.appendChild(option);
+      const opt = document.createElement("option");
+      opt.value = i;
+      opt.textContent = w.name;
+      select.appendChild(opt);
     });
     select.onchange = () => renderWeekContent(select.value);
     if (select.options.length > 0) {
@@ -399,82 +406,8 @@
     }
   }
 
-  async function exportPDF() {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({
-      orientation: "portrait",
-      unit: "pt",
-      format: "a4"
-    });
-
-    // تحميل خط عربي
-    const font = await fetch('https://fonts.gstatic.com/s/tajawal/v9/IgbvMIE1UvNlaic0ylGXSQ.woff2 ').then(res => res.arrayBuffer());
-    const tajawalFont = new Uint8Array(font);
-    doc.addFileToVFS("Tajawal-Regular.woff2", btoa(String.fromCharCode.apply(null, tajawalFont)));
-    doc.addFont("Tajawal-Regular.woff2", "Tajawal", "normal");
-    doc.setFont("Tajawal");
-
-    let y = 60;
-
-    doc.setFontSize(18);
-    doc.setTextColor("#f8b500");
-    doc.text("تقرير جدول التمارين الأسبوعي", 40, y);
-    y += 30;
-
-    data.weeks.forEach((week, wIndex) => {
-      doc.setFontSize(14);
-      doc.setTextColor("#f8b500");
-      doc.text(week.name, 40, y);
-      y += 20;
-
-      daysOfWeek.forEach(day => {
-        doc.setFontSize(12);
-        doc.setTextColor("#ffffff");
-        doc.text(day, 50, y);
-        y += 15;
-
-        const exercises = week.days[day] || [];
-
-        if (exercises.length === 0) {
-          doc.text("لا يوجد تمارين", 60, y);
-          y += 15;
-        } else {
-          exercises.forEach(ex => {
-            const line = `- ${ex.name || "بدون اسم"} | جلسات: ${ex.sessions || "-"} | تكرار: ${ex.reps || "-"} | وزن: ${ex.weight || "-"} كغ | نسبة: ${ex.percent || "-"}% | مدة: ${ex.duration || "-"} دقيقة | تقدم: ${ex.progress || "-"}`;
-            const lines = doc.splitTextToSize(line, 500);
-            doc.text(lines, 60, y);
-            y += lines.length * 14;
-            if (y > 750) {
-              doc.addPage();
-              y = 60;
-            }
-          });
-        }
-
-        if (week.days[day].notes && week.days[day].notes.trim()) {
-          doc.setFontSize(11);
-          doc.setTextColor("#aaaaaa");
-          const notesLine = `ملاحظات: ${week.days[day].notes.trim()}`;
-          const notesLines = doc.splitTextToSize(notesLine, 500);
-          doc.text(notesLines, 60, y);
-          y += notesLines.length * 14;
-          if (y > 750) {
-            doc.addPage();
-            y = 60;
-          }
-        }
-
-        y += 10;
-      });
-
-      y += 20;
-      if (y > 750) {
-        doc.addPage();
-        y = 60;
-      }
-    });
-
-    doc.save("جدول_التمارين_الأسبوعي.pdf");
+  function exportPDF() {
+    alert("التصدير إلى PDF غير مفعل في هذا الإصدار.");
   }
 
   loadData();
